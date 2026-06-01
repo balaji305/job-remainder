@@ -1,6 +1,10 @@
 # Environments
 .env
 .venv
+#.venv folder
+.venv/
+
+
 
 # Python cache
 __pycache__/
