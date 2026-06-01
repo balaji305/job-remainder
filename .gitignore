@@ -1,6 +1,16 @@
-# Environment variables
+# Environments
 .env
+.venv
 
 # Python cache
 __pycache__/
-*.pyc
+*.py[codz]
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Logs and databases
+*.log
+db.sqlite3
