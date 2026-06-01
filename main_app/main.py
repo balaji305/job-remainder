@@ -212,7 +212,7 @@ def read_root():
 
 @app.post("/check-jobs")
 def check_jobs_endpoint():
-    fetch_and_process_sde_jobs()
-    fetch_and_process_sa_jobs()
+    fetch_and_process_amazon_sde_jobs()
+    fetch_and_process_amazon_sa_jobs()
     fetch_and_process_google_jobs()
     return {"message": "Job checks for SDE, SA, and Google initiated."}
