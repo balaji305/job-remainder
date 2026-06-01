@@ -210,7 +210,7 @@ def shutdown_scheduler():
 def read_root():
     return {"Hello": "World"}
 
-@app.post("/check-jobs")
+@app.get("/check-jobs")
 def check_jobs_endpoint():
     fetch_and_process_amazon_sde_jobs()
     fetch_and_process_amazon_sa_jobs()
