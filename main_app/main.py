@@ -18,23 +18,38 @@ ua = UserAgent()
 amazon_sde_last_seen_job_id = None
 amazon_sa_last_seen_job_id = None
 google_last_seen_job_id = None
+job_list_buffer = []
 
-def send_email(new_jobs, job_type):
+def prepare_send_email(new_jobs, job_type):
+    global job_list_buffer
+    for job in new_jobs:
+        job_list_buffer.append(job)
+
+    print(f"Stored {len(new_jobs)} new jobs for {job_type}.")
+
+def send_email():
+    global job_list_buffer
+    new_jobs = job_list_buffer
+    job_list_buffer = []
+
+    if not new_jobs:
+        return
+
     sender_email = os.getenv("SENDER_EMAIL")
     receiver_email = os.getenv("RECIPIENT_EMAIL")
     password = os.getenv("SENDER_PASSWORD")
 
     message = MIMEMultipart("alternative")
-    message["Subject"] = f"New {job_type} Job Alert!"
+    message["Subject"] = f"New Job Alert!"
     message["From"] = sender_email
     message["To"] = receiver_email
 
-    text = f"Hi there,\n\nNew {job_type} jobs have been found:\n\n"
+    text = f"Hi there,\n\nNew jobs have been found:\n\n"
     html = f"""\
     <html>
       <body>
         <p>Hi there,</p>
-        <p>New {job_type} jobs have been found:</p>
+        <p>New jobs have been found:</p>
         <ul>
     """
 
@@ -65,9 +80,9 @@ def send_email(new_jobs, job_type):
         server.starttls()
         server.login(sender_email, password)
         server.sendmail(sender_email, receiver_email, message.as_string())
-        print(f"Email for {job_type} sent successfully!")
+        print(f"Email sent successfully!")
     except Exception as e:
-        print(f"Error sending email for {job_type}: {e}")
+        print(f"Error sending email: {e}")
     finally:
         server.quit()
 
@@ -90,6 +105,15 @@ def amazon_process_jobs(job_type, url, last_seen_id_global_name):
 
         if last_seen_id is None:
             globals()[last_seen_id_global_name] = latest_job_id
+            new_jobs = []
+            new_jobs.append(
+                {
+                    "id": jobs[0].get('id_icims'),
+                    "title": jobs[0].get('title'),
+                    "link": f"https://www.amazon.jobs{jobs[0].get('job_path')}"
+                }
+            )
+            prepare_send_email(new_jobs, job_type)
             print(f"Initial {job_type} job list populated. Latest job ID: {latest_job_id}")
             return
 
@@ -112,7 +136,7 @@ def amazon_process_jobs(job_type, url, last_seen_id_global_name):
                     "link": f"https://www.amazon.jobs{job.get('job_path')}"
                 } for job in new_jobs_raw
             ]
-            send_email(new_jobs_formatted, job_type)
+            prepare_send_email(new_jobs_formatted, job_type)
             globals()[last_seen_id_global_name] = latest_job_id
             print(f"{len(new_jobs_raw)} new {job_type} jobs found and email sent.")
         else:
@@ -145,6 +169,14 @@ def google_process_jobs(job_type, url, last_seen_id_global_name):
 
         if last_seen_id is None:
             globals()[last_seen_id_global_name] = latest_job_id
+            job = jobs[0]
+            new_jobs = []
+            job_id = job['ssk'].split(':')[-1]
+            title = job.find("h3", class_="QJPWVe").text.strip()
+            link_suffix = job.find("a", class_="WpHeLc")['href']
+            link = f"https://www.google.com/about/careers/applications/{link_suffix}"
+            new_jobs.append({"id": job_id, "title": title, "link": link})
+            prepare_send_email(new_jobs, job_type)
             print(f"Initial {job_type} job list populated. Latest job ID: {latest_job_id}")
             return
 
@@ -168,8 +200,8 @@ def google_process_jobs(job_type, url, last_seen_id_global_name):
                 link_suffix = job.find("a", class_="WpHeLc")['href']
                 link = f"https://www.google.com/about/careers/applications/{link_suffix}"
                 new_jobs_formatted.append({"id": job_id, "title": title, "link": link})
-            
-            send_email(new_jobs_formatted, job_type)
+
+            prepare_send_email(new_jobs_formatted, job_type)
             globals()[last_seen_id_global_name] = latest_job_id
             print(f"{len(new_jobs_raw)} new {job_type} jobs found and email sent.")
         else:
@@ -195,8 +227,9 @@ def fetch_and_process_google_jobs():
 
 scheduler = BackgroundScheduler()
 scheduler.add_job(fetch_and_process_amazon_sde_jobs,    'interval', hours=1, jitter=180, next_run_time=datetime.now())
-scheduler.add_job(fetch_and_process_amazon_sa_jobs,     'interval', hours=1, jitter=240, next_run_time=datetime.now() + timedelta(minutes=15))
-scheduler.add_job(fetch_and_process_google_jobs, 'interval', hours=1, jitter=300, next_run_time=datetime.now() + timedelta(minutes=30))
+scheduler.add_job(fetch_and_process_amazon_sa_jobs,     'interval', hours=1, jitter=240, next_run_time=datetime.now())
+scheduler.add_job(fetch_and_process_google_jobs, 'interval', hours=1, jitter=300, next_run_time=datetime.now())
+scheduler.add_job(send_email, 'interval', hours=1, jitter=360, next_run_time=datetime.now() + timedelta(minutes = 2))
 
 @app.on_event("startup")
 def start_scheduler():
@@ -215,10 +248,10 @@ def check_jobs_endpoint():
     fetch_and_process_amazon_sde_jobs()
     fetch_and_process_amazon_sa_jobs()
     fetch_and_process_google_jobs()
+    send_email()
     return {"message": "Job checks for SDE, SA, and Google initiated."}
 
-# expose global variables
-@app.get("/get-gloabls")
+@app.get("/get-globals")
 def get_globals_endpoint():
     return{
         "message": "Here is the list of Globals",
