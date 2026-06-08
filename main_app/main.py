@@ -216,3 +216,13 @@ def check_jobs_endpoint():
     fetch_and_process_amazon_sa_jobs()
     fetch_and_process_google_jobs()
     return {"message": "Job checks for SDE, SA, and Google initiated."}
+
+# expose global variables
+@app.get("/get-gloabls")
+def get_globals_endpoint():
+    return{
+        "message": "Here is the list of Globals",
+        "amazon-sde": amazon_sde_last_seen_job_id,
+        "amazon-sa": amazon_sa_last_seen_job_id,
+        "google": google_last_seen_job_id
+    }
